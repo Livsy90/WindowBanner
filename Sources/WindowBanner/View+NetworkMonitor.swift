@@ -15,29 +15,6 @@
 import SwiftUI
 import Network
 
-/// Example preview demonstrating how to attach the network monitoring modifier to a view hierarchy.
-#Preview {
-    NavigationStack {
-        Text("Content")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Image(systemName: "person.fill")
-                }
-            }
-            .navigationTitle("Home")
-    }
-    .networkMonitoring(
-        noConnectionConfig: .init(
-            title: "No Internet Connection",
-            backgroundColor: .red
-        ),
-        restoredConfing: .init(
-            title: "Internet Connection Restored",
-            backgroundColor: UIColor(red: 64/255, green: 224/255, blue: 208/255, alpha: 1.0)
-        )
-    )
-}
-
 /// Adds live network connectivity monitoring to any SwiftUI view.
 ///
 /// The modifier observes network status via `NWPathMonitor` and updates the hosting UIWindow with
@@ -71,9 +48,34 @@ public extension View {
     }
 }
 
+/// Example preview demonstrating how to attach the network monitoring modifier to a view hierarchy.
+@available(iOS 16.0)
+#Preview {
+    NavigationStack {
+        Text("Content")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Image(systemName: "person.fill")
+                }
+            }
+            .navigationTitle("Home")
+    }
+    .networkMonitoring(
+        noConnectionConfig: .init(
+            title: "No Internet Connection",
+            backgroundColor: .red
+        ),
+        restoredConfing: .init(
+            title: "Internet Connection Restored",
+            backgroundColor: .systemTeal
+        )
+    )
+}
+
 public struct WindowBannerConfig {
     /// Text shown when the primary state is active.
     let title: String
+    
     /// Background color for the primary state.
     let backgroundColor: UIColor
     
@@ -171,9 +173,6 @@ private struct WindowExtractor: UIViewRepresentable {
 }
 
 /// A `ViewModifier` that observes network connectivity and updates the hosting window.
-///
-/// The modifier writes the current connectivity to `UIWindow.isNetworkAvailable` so that other
-/// parts of the UI or hosting infrastructure can react accordingly.
 private struct NetworkMonitoringView: ViewModifier {
     
     /// Configuration controlling the appearance and content of the banner shown when there is no internet connection.
@@ -187,7 +186,7 @@ private struct NetworkMonitoringView: ViewModifier {
     /// Delay before auto-hiding the banner after connection is restored.
     let hideDelay: TimeInterval
     /// Shared monitor that publishes connectivity changes on the main actor.
-    @State private var monitor = NetworkMonitor()
+    @StateObject private var monitor = NetworkMonitor()
     /// The current hosting window for the modified view (if available).
     @State private var window: UIWindow?
     /// Task used to schedule auto-hide; cancelled when new status arrives.
@@ -199,7 +198,7 @@ private struct NetworkMonitoringView: ViewModifier {
                 self.window = window
                 apply(for: monitor.hasNetworkConnection)
             }
-            .onChange(of: monitor.hasNetworkConnection) { _, newValue in
+            .onChange(of: monitor.hasNetworkConnection) { newValue in
                 apply(for: newValue)
             }
     }
@@ -213,17 +212,16 @@ private struct NetworkMonitoringView: ViewModifier {
 
         if !isConnected {
             // No internet: show red banner with offline text.
-            window.topBanner(isPresented: true) { builder in
-                // User config first so they can override defaults; then we enforce critical fields.
-                builder
+            window.presentTopBanner { config in
+                config
                     .title(noConnectionConfig.title)
                     .backgroundColor(noConnectionConfig.backgroundColor)
                     .textColor(noConnectionConfig.textColor)
             }
-        } else if window.isBannerVisible && isConnected {
+        } else if window.isBannerPresented && isConnected {
             // Restored: show green banner briefly, then hide after delay.
-            window.topBanner(isPresented: true) { builder in
-                builder
+            window.presentTopBanner { config in
+                config
                     .title(restoredConfig.title)
                     .backgroundColor(restoredConfig.backgroundColor)
                     .textColor(restoredConfig.textColor)
@@ -232,11 +230,11 @@ private struct NetworkMonitoringView: ViewModifier {
             hideTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(hideDelay * 1_000_000_000))
                 if !Task.isCancelled {
-                    window.topBanner(isPresented: false)
+                    window.dismissTopBanner()
                 }
             }
         } else {
-            window.isBannerVisible = false
+            window.dismissTopBanner()
         }
     }
 }
@@ -245,10 +243,9 @@ private struct NetworkMonitoringView: ViewModifier {
 ///
 /// Updates occur on the main actor to integrate cleanly with SwiftUI state.
 @MainActor
-@Observable
-final class NetworkMonitor {
+final class NetworkMonitor: ObservableObject {
     /// Indicates whether the device currently has an active network path.
-    var hasNetworkConnection = true
+    @Published var hasNetworkConnection = true
 
     /// Underlying Network framework monitor.
     private let networkMonitor = NWPathMonitor()

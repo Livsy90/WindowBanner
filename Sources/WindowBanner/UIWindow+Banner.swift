@@ -1,3 +1,4 @@
+/// UIWindow+Banner
 ///
 /// Provides a lightweight, window-scoped banner that indicates a status message.
 /// The banner slides in from the top of a `UIWindow` when the primary state is active
@@ -13,25 +14,8 @@
 import UIKit
 import ObjectiveC
 
-private extension UIWindow {
-    /// Returns true if the window is currently in landscape orientation.
-    var isLandscape: Bool {
-        if let scene = windowScene {
-            if #available(iOS 26.0, *) {
-                return scene.effectiveGeometry.interfaceOrientation.isLandscape
-            } else {
-                return scene.interfaceOrientation.isLandscape
-            }
-        }
-        // Fallbacks if windowScene is unavailable
-        if traitCollection.verticalSizeClass == .compact && traitCollection.horizontalSizeClass == .regular {
-            return true
-        }
-        return UIDevice.current.orientation.isLandscape
-    }
-}
-
 /// Keys for Objective‑C associated objects used to keep per-window state.
+@MainActor
 private enum AssociatedKeys {
     static var bannerView: UInt8 = 0
     static var bannerTopConstraint: UInt8 = 0
@@ -43,52 +27,28 @@ private enum AssociatedKeys {
 }
 
 extension UIWindow {
-    /// Controls visibility of the banner for this window.
-    /// Set to `true` to show the banner, `false` to hide it. Changes are dispatched to the main queue and animated.
-    public var isBannerVisible: Bool {
-        get {
-            (objc_getAssociatedObject(self, &AssociatedKeys.isBannerPresented) as? Bool) ?? false
-        }
-        set {
-            let current = (objc_getAssociatedObject(self, &AssociatedKeys.isBannerPresented) as? Bool) ?? false
-            guard current != newValue else { return }
-            objc_setAssociatedObject(self, &AssociatedKeys.isBannerPresented, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-            DispatchQueue.main.async { [weak self] in
-                if newValue {
-                    self?.presentBanner()
-                } else {
-                    self?.removeBanner()
-                }
-            }
-        }
+    public var isBannerPresented: Bool {
+        isBannerVisible
     }
-
-    /// Presents or hides a top banner for this window with optional per-call configuration.
+    
+    /// Presents a top banner for this window with optional per-call configuration.
     /// - Parameters:
-    ///   - isPresented: Pass `true` to show the banner, `false` to hide it.
     ///   - config: Optional builder that lets you override appearance for this call without changing global defaults.
     ///
-    /// The configuration is applied only for the duration of this update; global defaults remain unchanged.
-    public func topBanner(
-        isPresented: Bool,
+    public func presentTopBanner(
         config: ((inout TopBannerConfigBuilder) -> Void)? = nil
     ) {
-        // If a per-call config is provided, build a temporary appearance and assign it per window.
         if let config {
             var builder = TopBannerConfigBuilder()
             config(&builder)
-            // Store per-window appearance
             self.currentBannerAppearance = builder.build()
             
         }
-        // Apply immediately even if visibility state hasn't changed.
-        if isPresented {
-            presentBanner()
-        } else {
-            removeBanner()
-        }
-        // Keep the stored visibility flag in sync
-        self.isBannerVisible = isPresented
+        isBannerVisible = true
+    }
+    
+    public func dismissTopBanner() {
+        isBannerVisible = false
     }
 }
 
@@ -117,6 +77,7 @@ extension UIWindow {
         let font: UIFont
         
         /// Default appearance used when no per-window appearance is provided.
+        @MainActor
         static let `default` = TopBannerAppearance(
             title: "",
             backgroundColor: .systemGreen,
@@ -150,6 +111,7 @@ extension UIWindow {
     ///
     /// Use with `topBanner(isPresented:config:)` to selectively change
     /// text, colors, typography, and layout metrics.
+    @MainActor
     public final class TopBannerConfigBuilder {
         /// Optional override for the text.
         private var title: String?
@@ -215,7 +177,28 @@ extension UIWindow {
 }
 
 private extension UIWindow {
-    
+    /// Controls visibility of the banner for this window.
+    /// Set to `true` to show the banner, `false` to hide it. Changes are dispatched to the main queue and animated.
+    var isBannerVisible: Bool {
+        get {
+            (objc_getAssociatedObject(self, &AssociatedKeys.isBannerPresented) as? Bool) ?? false
+        }
+        set {
+            let current = (objc_getAssociatedObject(self, &AssociatedKeys.isBannerPresented) as? Bool) ?? false
+            guard current != newValue else { return }
+            objc_setAssociatedObject(self, &AssociatedKeys.isBannerPresented, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            DispatchQueue.main.async { [weak self] in
+                if newValue {
+                    self?.presentBanner()
+                } else {
+                    self?.removeBanner()
+                }
+            }
+        }
+    }
+}
+
+private extension UIWindow {
     /// Per-window banner instance stored via associated objects.
     var bannerView: BannerView? {
         get { objc_getAssociatedObject(self, &AssociatedKeys.bannerView) as? BannerView }
@@ -327,16 +310,7 @@ private extension UIWindow {
             self.rootViewController?.additionalSafeAreaInsets.top = targetTopInset
             self.rootViewController?.view.layoutIfNeeded()
         }, completion: { _ in
-            // Hard sync to force SwiftUI/UIScrollView to commit safe area changes
-            if let rootView = self.rootViewController?.view {
-                var f = rootView.frame
-                f.size.height += 0.1
-                rootView.frame = f
-                f.size.height -= 0.1
-                rootView.frame = f
-                rootView.setNeedsLayout()
-                rootView.layoutIfNeeded()
-            }
+            self.hardSync()
         })
         
         // Register for orientation changes if not already registered
@@ -359,16 +333,7 @@ private extension UIWindow {
                             self.rootViewController?.additionalSafeAreaInsets.top = baseInset + effectiveAppearance.height - 20
                             self.rootViewController?.view.layoutIfNeeded()
                         }, completion: { _ in
-                            // Hard sync to force SwiftUI/UIScrollView to commit safe area changes
-                            if let rootView = self.rootViewController?.view {
-                                var f = rootView.frame
-                                f.size.height += 0.1
-                                rootView.frame = f
-                                f.size.height -= 0.1
-                                rootView.frame = f
-                                rootView.setNeedsLayout()
-                                rootView.layoutIfNeeded()
-                            }
+                            self.hardSync()
                         })
                     }
                 }
@@ -430,22 +395,13 @@ private extension UIWindow {
         
         let base = originalTopSafeAreaInset ?? 0
         
-        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseIn]) {
+        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseIn]) { [self] in
             // Animate banner slide-out by applying the updated top constraint
-            self.layoutIfNeeded()
+            layoutIfNeeded()
             // Restore safe area to original so content moves back up
-            self.rootViewController?.additionalSafeAreaInsets.top = base
-            self.rootViewController?.view.layoutIfNeeded()
-            // Hard sync to force UIScrollView to commit safe area changes
-            if let rootView = self.rootViewController?.view {
-                var f = rootView.frame
-                f.size.height += 0.01
-                rootView.frame = f
-                f.size.height -= 0.01
-                rootView.frame = f
-                rootView.setNeedsLayout()
-                rootView.layoutIfNeeded()
-            }
+            rootViewController?.additionalSafeAreaInsets.top = base
+            rootViewController?.view.layoutIfNeeded()
+            hardSync()
         } completion: { _ in
             banner.removeFromSuperview()
             self.bannerTopConstraint = nil
@@ -455,6 +411,19 @@ private extension UIWindow {
                 NotificationCenter.default.removeObserver(token)
                 self.orientationObserver = nil
             }
+        }
+    }
+    
+    /// Hard sync to force UIScrollView to commit safe area changes
+    private func hardSync() {
+        if let rootView = rootViewController?.view {
+            var frame = rootView.frame
+            frame.size.height += 0.01
+            rootView.frame = frame
+            frame.size.height -= 0.01
+            rootView.frame = frame
+            rootView.setNeedsLayout()
+            rootView.layoutIfNeeded()
         }
     }
     
@@ -541,3 +510,20 @@ private extension UIWindow {
     }
 }
 
+private extension UIWindow {
+    /// Returns true if the window is currently in landscape orientation.
+    var isLandscape: Bool {
+        if let scene = windowScene {
+            if #available(iOS 26.0, *) {
+                return scene.effectiveGeometry.interfaceOrientation.isLandscape
+            } else {
+                return scene.interfaceOrientation.isLandscape
+            }
+        }
+        // Fallbacks if windowScene is unavailable
+        if traitCollection.verticalSizeClass == .compact && traitCollection.horizontalSizeClass == .regular {
+            return true
+        }
+        return UIDevice.current.orientation.isLandscape
+    }
+}

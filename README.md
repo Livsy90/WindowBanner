@@ -1,6 +1,8 @@
-# WindowBanner
+# WindowBanner — Window‑Scoped iOS Banner with optional Network Monitoring
 
-A lightweight, **window-scoped** top banner for iOS that shows a short status message and **pushes the content down** (via safe-area insets) while it’s visible.
+A lightweight, **window-scoped** top banner for iOS that shows short status messages, **pushes content down** via safe‑area insets, and includes a ready‑to‑use SwiftUI network monitoring integration built on top of the same UIWindow infrastructure.
+
+It enables both manual banner presentation and automatic system‑level feedback such as offline/online state handling.
 
 This implementation is designed to work well with UIKit and SwiftUI content hosted inside a `UIWindow` / `UIHostingController`.
 
@@ -35,35 +37,25 @@ https://github.com/Livsy90/WindowBanner
 dependencies: [
  .package(url: "https://github.com/Livsy90/WindowBanner", branch: "main")
 ]
+```
 
-How it works
+## How it works
 
 WindowBanner attaches a BannerView to a UIWindow and animates it using Auto Layout constraints:
-    •    The banner is added as a subview of the window and pinned to leading/trailing.
-    •    Visibility is animated by changing the banner’s top constraint from -height → 0.
-    •    Content is pushed down by adjusting:
-    •    window.rootViewController?.additionalSafeAreaInsets.top
+- The banner is added as a subview of the window and pinned
+- Visibility is animated by changing the banner’s top constraint from `-height` → `0`
+- Content is pushed down by adjusting:
+  - `window.rootViewController?.additionalSafeAreaInsets.top`
 
 The banner’s state is stored per window using Objective-C associated objects (banner view, constraints, current appearance, orientation observer, etc.).
 
-Usage
+## Usage
 
-1) Toggle visibility with a simple flag
+### Present with configuration:
 
-// Show
-window.isBannerVisible = true
-
-// Hide
-window.isBannerVisible = false
-
-This uses the currently stored appearance for that window (or defaults if you never set one).
-
-2) Present/hide with configuration (recommended)
-
-Use topBanner(isPresented:config:) to both control visibility and override appearance values for that call:
-
-window.topBanner(isPresented: true) { builder in
-    builder
+```swift
+window.presentTopBanner { config in
+    config
         .title("Connected")
         .backgroundColor(.systemGreen)
         .textColor(.white)
@@ -71,62 +63,97 @@ window.topBanner(isPresented: true) { builder in
         .titleTopInset(20)
         .font(.systemFont(ofSize: 17, weight: .semibold))
 }
+```
 
-Hide it later:
+Dismiss:
 
-window.topBanner(isPresented: false)
+```swift
+window.dismissTopBanner()
+```
 
 3) Update appearance while visible
 
-Calling topBanner(isPresented:true, config:...) again updates the banner in-place.
+Calling `presentTopBanner` again updates the banner in-place.
 If the banner is already on screen, changes are applied with a cross-dissolve transition.
 
-window.topBanner(isPresented: true) { builder in
-    builder
+```swift
+window.presentTopBanner { config in
+    config
         .title("No Internet")
         .backgroundColor(.systemRed)
 }
+```
 
-Default appearance
+## Default appearance
 
 If you don’t provide any configuration, the banner uses defaults:
-    •    title: ""
-    •    backgroundColor: systemGreen
-    •    textColor: white
-    •    height: 80
-    •    titleTopInset: 20
-    •    font: system semibold 17
+- `title`: `""`
+- `backgroundColor`: `systemGreen`
+- `textColor`: `white`
+- `height`: `80`
+- `titleTopInset`: `20`
+- `font`: system semibold 17
 
-Orientation behavior
+## Orientation behavior
 
 The implementation optionally switches to a compact style in landscape via effectiveAppearance(from:):
-    •    landscape height becomes smaller (e.g. 18)
-    •    inset becomes 0
-    •    font becomes smaller
+- Landscape height becomes smaller (e.g. `18`)
+- Inset becomes `0`
+- Font becomes smaller
 
 This is applied automatically on UIDevice.orientationDidChangeNotification.
 
-If you prefer different rules (or no changes), adjust effectiveAppearance(from:).
+## Network Monitoring (SwiftUI)
 
-Notes for SwiftUI and Scroll Views
+WindowBanner can be combined with a small SwiftUI modifier to provide global network status feedback using the same `UIWindow` banner infrastructure.
 
-This banner pushes content by modifying safe-area insets. Some scroll views (and SwiftUI layouts) can be sensitive to rapid safe-area changes.
+This example shows how connectivity changes are reflected automatically at the window level.
 
-The code includes a small “hard sync” layout nudge after animations to help the system commit the updated insets more reliably.
+```swift
+ContentView()
+    .networkMonitoring(
+        hideDelay: 2.0,
+        noConnectionConfig: .init(
+            title: "No Internet Connection",
+            backgroundColor: .systemRed,
+            textColor: .white,
+            height: 80,
+            titleTopInset: 20,
+            font: .systemFont(ofSize: 17, weight: .semibold)
+        ),
+        restoredConfig: .init(
+            title: "Back Online",
+            backgroundColor: .systemTeal,
+            textColor: .white,
+            height: 80,
+            titleTopInset: 20,
+            font: .systemFont(ofSize: 17, weight: .semibold)
+        )
+    )
+```
 
-If you still see a one-frame “jump” in a specific layout:
-    •    ensure you are not triggering competing animations at the same time (e.g. animated navigation bar changes)
-    •    consider coordinating banner presentation with other top inset changes
-    •    consider increasing animation duration slightly if content is heavy
+### How it works
 
-Threading
-    •    The public API dispatches to the main queue.
-    •    The implementation is annotated with @MainActor where appropriate.
+- A lightweight `NWPathMonitor` observes network reachability
+- The current `UIWindow` is extracted from SwiftUI using `UIViewRepresentable`
+- Connectivity changes trigger:
+  - Persistent banner when offline
+  - Temporary confirmation banner when connection is restored
+- All layout shifting is handled automatically via safe-area insets
 
-API Summary
-    •    UIWindow.isBannerVisible: Bool
-    •    toggles banner visibility for that window
-    •    UIWindow.topBanner(isPresented: Bool, config: ((inout TopBannerConfigBuilder) -> Void)? = nil)
-    •    shows/hides banner and optionally overrides appearance values
-    •    TopBannerConfigBuilder
-    •    chainable configuration for title, colors, font, height, and top inset
+This keeps network feedback centralized at the window level and avoids per-screen banner logic.
+Attach the modifier to your root view to ensure global network state handling across the entire app.
+
+## UIWindow API Summary
+
+- `isBannerPresented: Bool`
+  Shows banner visibility for that window
+
+- `presentTopBanner(config: ((inout TopBannerConfigBuilder) -> Void)? = nil)`
+  Shows the banner and optionally overrides appearance values
+  
+  - `dismissTopBanner()`
+  Hides the banner and optionally overrides appearance values
+
+- `TopBannerConfigBuilder`
+  Chainable configuration for title, colors, font, height, and top inset
