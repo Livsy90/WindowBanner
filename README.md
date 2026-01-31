@@ -1,6 +1,5 @@
 # WindowBanner — Window‑Scoped iOS Banner with optional Network Monitoring
 
-![Demo](https://github.com/Livsy90/WindowBanner/blob/main/WindowBanner.mp4)
 
 A lightweight, **window-scoped** top banner for iOS that shows short status messages, **pushes content down** via safe‑area insets, and includes a ready‑to‑use SwiftUI network monitoring integration built on top of the same UIWindow infrastructure.
 
