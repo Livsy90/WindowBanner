@@ -18,7 +18,7 @@ extension UIWindow {
     ///
     /// Instances of this class represent a complete set of styling values. A single
     /// instance per window can be used to customize appearance.
-    struct TopBannerAppearance {
+    final class TopBannerAppearance {
         /// Text shown when the primary state is active.
         let title: String
         
@@ -149,11 +149,7 @@ extension UIWindow {
             guard current != newValue else { return }
             objc_setAssociatedObject(self, &AssociatedKeys.isBannerPresented, newValue, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
             DispatchQueue.main.async { [weak self] in
-                if newValue {
-                    self?.presentBanner()
-                } else {
-                    self?.removeBanner()
-                }
+                self?.setBannerVisible(newValue)
             }
         }
     }
@@ -223,20 +219,17 @@ extension UIWindow {
         }
     }
     
-    /// Ensures the banner exists, configures it, and animates it into view.
-    /// Uses Auto Layout constraints and animates the top constraint to show the banner.
-    /// Adjusts window's root view controller additionalSafeAreaInsets.top to push content below the banner.
-    func presentBanner() {
+    /// Ensures banner view exists and is constrained in the window hierarchy (no animation, no safe-area changes).
+    func ensureBannerInHierarchy() {
         makeBannerIfNeeded()
-        configureBanner()
         guard let bannerView else { return }
         let appearance = currentBannerAppearance ?? .default
         let effective = effectiveAppearance(from: appearance)
-        
+
         if bannerView.superview == nil {
             addSubview(bannerView)
             bannerView.translatesAutoresizingMaskIntoConstraints = false
-            
+
             let leading = bannerView.leadingAnchor.constraint(equalTo: leadingAnchor)
             let trailing = bannerView.trailingAnchor.constraint(equalTo: trailingAnchor)
             let heightConstraint = bannerView.heightAnchor.constraint(equalToConstant: effective.height)
@@ -246,34 +239,13 @@ extension UIWindow {
                 heightConstraint
             ])
             self.bannerHeightConstraint = heightConstraint
-            
-            // Use safeAreaLayoutGuide.topAnchor instead of topAnchor
+
             let topConstraint = bannerView.topAnchor.constraint(equalTo: topAnchor, constant: -effective.height)
             topConstraint.isActive = true
             self.bannerTopConstraint = topConstraint
             layoutIfNeeded()
         }
-        
-        guard let topConstraint = self.bannerTopConstraint else { return }
-        topConstraint.constant = 0
-        
-        // Capture original safe area inset if not set
-        if originalTopSafeAreaInset == nil {
-            originalTopSafeAreaInset = rootViewController?.additionalSafeAreaInsets.top ?? 0
-        }
-        let targetTopInset = (originalTopSafeAreaInset ?? 0) + effective.height - 20
-        
-        // Animate banner slide-in and content shift via safe area
-        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseOut], animations: {
-            // Move banner from -height to 0
-            self.layoutIfNeeded()
-            // Shift content down by increasing safe area
-            self.rootViewController?.additionalSafeAreaInsets.top = targetTopInset
-            self.rootViewController?.view.layoutIfNeeded()
-        }, completion: { _ in
-            self.hardSync()
-        })
-        
+
         // Register for orientation changes if not already registered
         if orientationObserver == nil {
             orientationObserver = NotificationCenter.default.addObserver(
@@ -283,7 +255,7 @@ extension UIWindow {
             ) { [weak self] _ in
                 guard let self = self else { return }
                 DispatchQueue.main.async {
-                    self.configureBanner()
+                    self.applyAppearance()
                     if self.isBannerVisible {
                         let effectiveAppearance = self.effectiveAppearance(from: self.currentBannerAppearance ?? .default)
                         self.bannerHeightConstraint?.constant = effectiveAppearance.height
@@ -301,6 +273,85 @@ extension UIWindow {
             }
         }
     }
+
+    /// Applies current appearance to the banner (no visibility changes).
+    func applyAppearance() {
+        let appearance = currentBannerAppearance ?? .default
+        let effective = effectiveAppearance(from: appearance)
+        guard let banner = self.bannerView else { return }
+
+        // Update height constraint to reflect effective height
+        bannerHeightConstraint?.constant = effective.height
+
+        let isInHierarchy = banner.superview != nil
+        if isInHierarchy {
+            UIView.transition(with: banner, duration: 0.2, options: [.transitionCrossDissolve, .allowAnimatedContent]) {
+                banner.configure(
+                    text: effective.title,
+                    backgroundColor: effective.backgroundColor,
+                    height: effective.height,
+                    titleTopInset: effective.titleTopInset,
+                    font: effective.font,
+                    textColor: effective.textColor
+                )
+            }
+        } else {
+            banner.configure(
+                text: effective.title,
+                backgroundColor: effective.backgroundColor,
+                height: effective.height,
+                titleTopInset: effective.titleTopInset,
+                font: effective.font,
+                textColor: effective.textColor
+            )
+        }
+    }
+
+    /// Animates visibility changes and adjusts safe area.
+    func setBannerVisible(_ visible: Bool) {
+        ensureBannerInHierarchy()
+        applyAppearance()
+        guard let topConstraint = self.bannerTopConstraint else { return }
+
+        let baseAppearance = currentBannerAppearance ?? .default
+        let effective = effectiveAppearance(from: baseAppearance)
+
+        if visible {
+            topConstraint.constant = 0
+
+            if originalTopSafeAreaInset == nil {
+                originalTopSafeAreaInset = rootViewController?.additionalSafeAreaInsets.top ?? 0
+            }
+            let targetTopInset = (originalTopSafeAreaInset ?? 0) + effective.height - 20
+
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseOut], animations: {
+                self.layoutIfNeeded()
+                self.rootViewController?.additionalSafeAreaInsets.top = targetTopInset
+                self.rootViewController?.view.layoutIfNeeded()
+            }, completion: { _ in
+                self.hardSync()
+            })
+        } else {
+            topConstraint.constant = -effective.height
+            let base = originalTopSafeAreaInset ?? 0
+
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseIn]) { [self] in
+                layoutIfNeeded()
+                rootViewController?.additionalSafeAreaInsets.top = base
+                rootViewController?.view.layoutIfNeeded()
+                hardSync()
+            } completion: { _ in
+                self.bannerView?.removeFromSuperview()
+                self.bannerTopConstraint = nil
+                self.originalTopSafeAreaInset = nil
+
+                if let token = self.orientationObserver {
+                    NotificationCenter.default.removeObserver(token)
+                    self.orientationObserver = nil
+                }
+            }
+        }
+    }
     
     /// Lazily creates the banner view sized to the window's width and the configured height.
     func makeBannerIfNeeded() {
@@ -313,6 +364,7 @@ extension UIWindow {
         }
     }
     
+    /// Deprecated: Use `applyAppearance()` instead.
     /// Applies primary appearance to the banner.
     func configureBanner() {
         let appearance = currentBannerAppearance ?? .default
@@ -341,37 +393,6 @@ extension UIWindow {
                 font: effective.font,
                 textColor: effective.textColor
             )
-        }
-    }
-    
-    /// Animates the banner out and removes it from the hierarchy upon completion.
-    /// Uses Auto Layout to animate the top constraint to hide the banner.
-    /// Restores window's root view controller additionalSafeAreaInsets.top to original inset.
-    func removeBanner() {
-        guard let banner = self.bannerView, let topConstraint = self.bannerTopConstraint else { return }
-
-        let baseAppearance = currentBannerAppearance ?? .default
-        let effective = effectiveAppearance(from: baseAppearance)
-        topConstraint.constant = -effective.height
-        
-        let base = originalTopSafeAreaInset ?? 0
-        
-        UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseIn]) { [self] in
-            // Animate banner slide-out by applying the updated top constraint
-            layoutIfNeeded()
-            // Restore safe area to original so content moves back up
-            rootViewController?.additionalSafeAreaInsets.top = base
-            rootViewController?.view.layoutIfNeeded()
-            hardSync()
-        } completion: { _ in
-            banner.removeFromSuperview()
-            self.bannerTopConstraint = nil
-            self.originalTopSafeAreaInset = nil
-            
-            if let token = self.orientationObserver {
-                NotificationCenter.default.removeObserver(token)
-                self.orientationObserver = nil
-            }
         }
     }
     

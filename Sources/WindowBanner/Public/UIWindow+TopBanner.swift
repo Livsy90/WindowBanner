@@ -18,7 +18,8 @@ public extension UIWindow {
             self.currentBannerAppearance = builder.build()
             
         }
-        presentBanner()
+        ensureBannerInHierarchy()
+        applyAppearance()
         isBannerVisible = true
     }
     
