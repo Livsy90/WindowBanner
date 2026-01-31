@@ -18,7 +18,7 @@ extension UIWindow {
     ///
     /// Instances of this class represent a complete set of styling values. A single
     /// instance per window can be used to customize appearance.
-    final class TopBannerAppearance {
+    struct TopBannerAppearance {
         /// Text shown when the primary state is active.
         let title: String
         
