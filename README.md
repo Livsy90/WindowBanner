@@ -98,7 +98,7 @@ If you don’t provide any configuration, the banner uses defaults:
 
 ## Orientation behavior
 
-The implementation optionally switches to a compact style in landscape via effectiveAppearance(from:):
+The implementation switches to a compact style in landscape:
 - Landscape height becomes smaller (e.g. `18`)
 - Inset becomes `0`
 - Font becomes smaller
