@@ -127,7 +127,7 @@ ContentView()
 
 ### How it works
 
-- A lightweight `NWPathMonitor` observes network reachability
+- A `NWPathMonitor` observes network reachability
 - The current `UIWindow` is extracted from SwiftUI using `UIViewRepresentable`
 - Connectivity changes trigger:
   - Persistent banner when offline
