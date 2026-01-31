@@ -263,7 +263,7 @@ extension UIWindow {
                         UIView.animate(withDuration: 0.25, delay: 0, options: [.curveEaseOut], animations: {
                             self.layoutIfNeeded()
                             let baseInset = self.originalTopSafeAreaInset ?? 0
-                            self.rootViewController?.additionalSafeAreaInsets.top = baseInset + effectiveAppearance.height - 20
+                            self.rootViewController?.additionalSafeAreaInsets.top = baseInset + (effectiveAppearance.height - 20)
                             self.rootViewController?.view.layoutIfNeeded()
                         }, completion: { _ in
                             self.hardSync()
@@ -356,9 +356,7 @@ extension UIWindow {
     /// Lazily creates the banner view sized to the window's width and the configured height.
     func makeBannerIfNeeded() {
         if self.bannerView == nil {
-            let banner = BannerView(
-                frame: CGRect(x: 0,y: 0, width: self.bounds.width, height: (currentBannerAppearance?.height ?? TopBannerAppearance.default.height))
-            )
+            let banner = BannerView()
             banner.translatesAutoresizingMaskIntoConstraints = false
             self.bannerView = banner
         }

@@ -40,7 +40,7 @@ struct NetworkMonitoringViewModifier: ViewModifier {
 
         guard let window else { return }
 
-        if !isConnected {
+        if !window.isBannerPresented && !isConnected {
             // No internet: show red banner with offline text.
             window.presentTopBanner { config in
                 config
