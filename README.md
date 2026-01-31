@@ -152,7 +152,7 @@ Attach the modifier to your root view to ensure global network state handling ac
 - `presentTopBanner(config: ((inout TopBannerConfigBuilder) -> Void)? = nil)`
   Shows the banner and optionally overrides appearance values
   
-  - `dismissTopBanner()`
+- `dismissTopBanner()`
   Hides the banner and optionally overrides appearance values
 
 - `TopBannerConfigBuilder`
