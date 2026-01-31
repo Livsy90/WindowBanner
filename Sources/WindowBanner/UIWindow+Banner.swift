@@ -44,6 +44,7 @@ extension UIWindow {
             self.currentBannerAppearance = builder.build()
             
         }
+        presentBanner()
         isBannerVisible = true
     }
     
