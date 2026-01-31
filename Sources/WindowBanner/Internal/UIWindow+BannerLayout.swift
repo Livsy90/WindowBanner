@@ -1,18 +1,5 @@
-/// UIWindow+Banner
-///
-/// Provides a lightweight, window-scoped banner that indicates a status message.
-/// The banner slides in from the top of a `UIWindow` when the primary state is active
-/// and slides out (after a short delay) when the secondary state is active. The API exposes
-/// a single public entry point, `UIWindow.isBannerVisible`, and a configuration helper
-/// to customize default appearance values.
-///
-/// Implementation details:
-/// - Uses Objective‑C associated objects to store per-window state (banner view, timer, flags).
-/// - Animates layout by adjusting the window's subviews when showing/hiding the banner.
-/// - Provides a small builder to override appearance at runtime per window.
-
-import UIKit
 import ObjectiveC
+import UIKit
 
 /// Keys for Objective‑C associated objects used to keep per-window state.
 @MainActor
@@ -24,33 +11,6 @@ private enum AssociatedKeys {
     static var isBannerPresented: UInt8 = 0
     static var currentAppearance: UInt8 = 0
     static var orientationObserver: UInt8 = 0
-}
-
-extension UIWindow {
-    public var isBannerPresented: Bool {
-        isBannerVisible
-    }
-    
-    /// Presents a top banner for this window with optional per-call configuration.
-    /// - Parameters:
-    ///   - config: Optional builder that lets you override appearance for this call without changing global defaults.
-    ///
-    public func presentTopBanner(
-        config: ((inout TopBannerConfigBuilder) -> Void)? = nil
-    ) {
-        if let config {
-            var builder = TopBannerConfigBuilder()
-            config(&builder)
-            self.currentBannerAppearance = builder.build()
-            
-        }
-        presentBanner()
-        isBannerVisible = true
-    }
-    
-    public func dismissTopBanner() {
-        isBannerVisible = false
-    }
 }
 
 extension UIWindow {
@@ -164,7 +124,7 @@ extension UIWindow {
         /// Builds a concrete appearance by merging overrides with local defaults.
         ///
         /// Values not set on the builder fall back to local defaults.
-        fileprivate func build() -> TopBannerAppearance {
+        func build() -> TopBannerAppearance {
             TopBannerAppearance(
                 title: title ?? TopBannerAppearance.default.title,
                 backgroundColor: backgroundColor ?? TopBannerAppearance.default.backgroundColor,
@@ -177,7 +137,7 @@ extension UIWindow {
     }
 }
 
-private extension UIWindow {
+extension UIWindow {
     /// Controls visibility of the banner for this window.
     /// Set to `true` to show the banner, `false` to hide it. Changes are dispatched to the main queue and animated.
     var isBannerVisible: Bool {
@@ -199,7 +159,7 @@ private extension UIWindow {
     }
 }
 
-private extension UIWindow {
+extension UIWindow {
     /// Per-window banner instance stored via associated objects.
     var bannerView: BannerView? {
         get { objc_getAssociatedObject(self, &AssociatedKeys.bannerView) as? BannerView }
