@@ -114,22 +114,13 @@ This example shows how connectivity changes are reflected automatically at the w
 ```swift
 ContentView()
     .networkMonitoring(
-        hideDelay: 2.0,
         noConnectionConfig: .init(
             title: "No Internet Connection",
-            backgroundColor: .systemRed,
-            textColor: .white,
-            height: 80,
-            titleTopInset: 20,
-            font: .systemFont(ofSize: 17, weight: .semibold)
+            backgroundColor: .systemRed
         ),
         restoredConfig: .init(
             title: "Back Online",
-            backgroundColor: .systemTeal,
-            textColor: .white,
-            height: 80,
-            titleTopInset: 20,
-            font: .systemFont(ofSize: 17, weight: .semibold)
+            backgroundColor: .systemTeal
         )
     )
 ```
