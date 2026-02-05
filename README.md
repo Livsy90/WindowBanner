@@ -51,6 +51,32 @@ WindowBanner attaches a BannerView to a UIWindow and animates it using Auto Layo
 
 The banner’s state is stored per window using Objective-C associated objects (banner view, constraints, current appearance, orientation observer, etc.).
 
+## UIWindow API
+
+- `isBannerPresented: Bool`
+  Shows banner visibility for that window
+
+- `presentTopBanner(config: ((inout TopBannerConfigBuilder) -> Void)? = nil)`
+  Shows the banner and optionally overrides appearance values
+  
+- `dismissTopBanner()`
+  Hides the banner and optionally overrides appearance values
+
+- `TopBannerConfigBuilder`
+  Chainable configuration for title, colors, font, height, and top inset
+  
+## SwiftUI View API
+  
+- `networkMonitoring(
+    hideDelay: TimeInterval = 2.0,
+    noConnectionConfig: WindowBannerConfig,
+    restoredConfing: WindowBannerConfig
+) -> some View`
+  Shows banner with the network connection status
+
+- `onChangeWindow(_ perform: @escaping (UIWindow?) -> Void) -> some View`
+  Extracts the current UIWindow instance
+
 ## Usage
 
 ### Present with configuration:
@@ -137,16 +163,3 @@ ContentView()
 This keeps network feedback centralized at the window level and avoids per-screen banner logic.
 Attach the modifier to your root view to ensure global network state handling across the entire app.
 
-## UIWindow API Summary
-
-- `isBannerPresented: Bool`
-  Shows banner visibility for that window
-
-- `presentTopBanner(config: ((inout TopBannerConfigBuilder) -> Void)? = nil)`
-  Shows the banner and optionally overrides appearance values
-  
-- `dismissTopBanner()`
-  Hides the banner and optionally overrides appearance values
-
-- `TopBannerConfigBuilder`
-  Chainable configuration for title, colors, font, height, and top inset

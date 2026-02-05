@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Internal helper to observe the `UIWindow` a SwiftUI view is hosted in.
-extension View {
+/// Helper to observe the `UIWindow` a SwiftUI view is hosted in.
+public extension View {
     /// Calls `perform` whenever the underlying `UIWindow` changes for this view.
     ///
     /// This uses a transparent `UIViewRepresentable` to detect `didMoveToWindow` events.
