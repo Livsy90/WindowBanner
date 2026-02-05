@@ -67,11 +67,7 @@ The banner’s state is stored per window using Objective-C associated objects (
   
 ## SwiftUI View API
   
-- `networkMonitoring(
-    hideDelay: TimeInterval = 2.0,
-    noConnectionConfig: WindowBannerConfig,
-    restoredConfing: WindowBannerConfig
-) -> some View`
+- `networkMonitoring(hideDelay: TimeInterval = 2.0, noConnectionConfig: WindowBannerConfig, restoredConfing: WindowBannerConfig) -> some View`
   Shows banner with the network connection status
 
 - `onChangeWindow(_ perform: @escaping (UIWindow?) -> Void) -> some View`
